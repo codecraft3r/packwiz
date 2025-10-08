@@ -358,6 +358,11 @@ func getSide(mod *modrinthApi.Project) string {
 }
 
 func shouldDownloadOnSide(side string) bool {
+	// Updated to handle new Modrinth side values:
+	// required - mod is required on this side
+	// optional - mod is optional on this side  
+	// unsupported - mod cannot run on this side
+	// unknown - side compatibility is unknown
 	return side == "required" || side == "optional"
 }
 
