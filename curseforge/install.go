@@ -224,7 +224,7 @@ var installCmd = &cobra.Command{
 
 					if cmdshared.PromptYesNo("Would you like to add them? [Y/n]: ") {
 						for _, v := range depsInstallable {
-							err = createModFile(v.modInfo, v.fileInfo, &index, false)
+							err = createModFile(v.modInfo, v.fileInfo, &index, false, []string{})
 							if err != nil {
 								fmt.Println(err)
 								os.Exit(1)
@@ -238,7 +238,7 @@ var installCmd = &cobra.Command{
 			}
 		}
 
-		err = createModFile(modInfoData, fileInfoData, &index, false)
+		err = createModFile(modInfoData, fileInfoData, &index, false, disabledClientPlatformsFlag)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -443,6 +443,7 @@ var fileIDFlag uint32
 
 var gameFlag string
 var categoryFlag string
+var disabledClientPlatformsFlag []string
 
 func init() {
 	curseforgeCmd.AddCommand(installCmd)
@@ -451,4 +452,5 @@ func init() {
 	installCmd.Flags().Uint32Var(&fileIDFlag, "file-id", 0, "The CurseForge file ID to use")
 	installCmd.Flags().StringVar(&gameFlag, "game", "minecraft", "The game to add files from (slug, as stored in URLs); the game in the URL takes precedence")
 	installCmd.Flags().StringVar(&categoryFlag, "category", "", "The category to add files from (slug, as stored in URLs); the category in the URL takes precedence")
+	installCmd.Flags().StringSliceVar(&disabledClientPlatformsFlag, "disabled-client-platforms", []string{}, "List of client platforms to disable this mod on (valid values: macos, linux, windows)")
 }

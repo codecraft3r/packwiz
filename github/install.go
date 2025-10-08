@@ -177,9 +177,10 @@ func installRelease(repo Repo, release Release, regex string, pack core.Pack) er
 		FileName: file.Name,
 		Side:     core.UniversalSide,
 		Download: core.ModDownload{
-			URL:        file.BrowserDownloadURL,
-			HashFormat: "sha256",
-			Hash:       hash,
+			URL:                     file.BrowserDownloadURL,
+			HashFormat:              "sha256",
+			Hash:                    hash,
+			DisabledClientPlatforms: disabledClientPlatformsFlag,
 		},
 		Update: updateMap,
 	}
@@ -223,10 +224,12 @@ func installRelease(repo Repo, release Release, regex string, pack core.Pack) er
 
 var branchFlag string
 var regexFlag string
+var disabledClientPlatformsFlag []string
 
 func init() {
 	githubCmd.AddCommand(installCmd)
 
 	installCmd.Flags().StringVar(&branchFlag, "branch", "", "The GitHub repository branch to retrieve releases for")
 	installCmd.Flags().StringVar(&regexFlag, "regex", "", "The regular expression to match releases against")
+	installCmd.Flags().StringSliceVar(&disabledClientPlatformsFlag, "disabled-client-platforms", []string{}, "List of client platforms to disable this mod on (valid values: macos, linux, windows)")
 }

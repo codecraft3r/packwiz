@@ -425,9 +425,10 @@ func createFileMeta(project *modrinthApi.Project, version *modrinthApi.Version, 
 		FileName: *file.Filename,
 		Side:     side,
 		Download: core.ModDownload{
-			URL:        *file.URL,
-			HashFormat: algorithm,
-			Hash:       hash,
+			URL:                     *file.URL,
+			HashFormat:              algorithm,
+			Hash:                    hash,
+			DisabledClientPlatforms: disabledClientPlatformsFlag,
 		},
 		Update: updateMap,
 	}
@@ -460,6 +461,7 @@ func createFileMeta(project *modrinthApi.Project, version *modrinthApi.Version, 
 var projectIDFlag string
 var versionIDFlag string
 var versionFilenameFlag string
+var disabledClientPlatformsFlag []string
 
 func init() {
 	modrinthCmd.AddCommand(installCmd)
@@ -467,4 +469,5 @@ func init() {
 	installCmd.Flags().StringVar(&projectIDFlag, "project-id", "", "The Modrinth project ID to use")
 	installCmd.Flags().StringVar(&versionIDFlag, "version-id", "", "The Modrinth version ID to use")
 	installCmd.Flags().StringVar(&versionFilenameFlag, "version-filename", "", "The Modrinth version filename to use")
+	installCmd.Flags().StringSliceVar(&disabledClientPlatformsFlag, "disabled-client-platforms", []string{}, "List of client platforms to disable this mod on (valid values: macos, linux, windows)")
 }

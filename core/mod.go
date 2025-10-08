@@ -33,9 +33,10 @@ const (
 
 // ModDownload specifies how to download the mod file
 type ModDownload struct {
-	URL        string `toml:"url,omitempty"`
-	HashFormat string `toml:"hash-format"`
-	Hash       string `toml:"hash"`
+	URL                      string   `toml:"url,omitempty"`
+	DisabledClientPlatforms  []string `toml:"disabled-client-platforms,omitempty"`
+	HashFormat               string   `toml:"hash-format"`
+	Hash                     string   `toml:"hash"`
 	// Mode defaults to modeURL (i.e. use URL when omitted or empty)
 	Mode string `toml:"mode,omitempty"`
 }

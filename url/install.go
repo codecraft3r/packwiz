@@ -68,15 +68,22 @@ var installCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		disabledClientPlatforms, err := cmd.Flags().GetStringSlice("disabled-client-platforms")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
 		filename := path.Base(dl.Path)
 		modMeta := core.Mod{
 			Name:     args[0],
 			FileName: filename,
 			Side:     core.UniversalSide,
 			Download: core.ModDownload{
-				URL:        args[1],
-				HashFormat: "sha256",
-				Hash:       hash,
+				URL:                     args[1],
+				HashFormat:              "sha256",
+				Hash:                    hash,
+				DisabledClientPlatforms: disabledClientPlatforms,
 			},
 		}
 
@@ -151,4 +158,5 @@ func init() {
 
 	installCmd.Flags().Bool("force", false, "Add a file even if the download URL is supported by packwiz in an alternative command (which may support dependencies and updates)")
 	installCmd.Flags().String("meta-name", "", "Filename to use for the created metadata file (defaults to a name generated from the name you supply)")
+	installCmd.Flags().StringSlice("disabled-client-platforms", []string{}, "List of client platforms to disable this mod on (valid values: macos, linux, windows)")
 }

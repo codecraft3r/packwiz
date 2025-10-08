@@ -176,7 +176,7 @@ func getPathForFile(gameID uint32, classID uint32, categoryID uint32, slug strin
 	return filepath.Join(viper.GetString("meta-folder-base"), metaFolder, slug+core.MetaExtension)
 }
 
-func createModFile(modInfo modInfo, fileInfo modFileInfo, index *core.Index, optionalDisabled bool) error {
+func createModFile(modInfo modInfo, fileInfo modFileInfo, index *core.Index, optionalDisabled bool, disabledClientPlatforms []string) error {
 	updateMap := make(map[string]map[string]interface{})
 	var err error
 
@@ -203,9 +203,10 @@ func createModFile(modInfo modInfo, fileInfo modFileInfo, index *core.Index, opt
 		FileName: fileInfo.FileName,
 		Side:     core.UniversalSide,
 		Download: core.ModDownload{
-			HashFormat: hashFormat,
-			Hash:       hash,
-			Mode:       core.ModeCF,
+			HashFormat:              hashFormat,
+			Hash:                    hash,
+			Mode:                    core.ModeCF,
+			DisabledClientPlatforms: disabledClientPlatforms,
 		},
 		Option: optional,
 		Update: updateMap,
