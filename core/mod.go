@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -55,6 +56,9 @@ const (
 	UniversalSide = "both"
 	EmptySide     = ""
 )
+
+// Valid client platforms for DisabledClientPlatforms
+var ValidClientPlatforms = []string{"macos", "linux", "windows"}
 
 // LoadMod attempts to load a mod file from a path
 func LoadMod(modFile string) (Mod, error) {
@@ -149,4 +153,86 @@ func SlugifyName(name string) string {
 	noDuplicateDashes := slugifyRegex4.ReplaceAllString(limitedChars, "-")
 	noLeadingTrailingDashes := slugifyRegex5.ReplaceAllString(noDuplicateDashes, "")
 	return noLeadingTrailingDashes
+}
+
+// ValidateSide checks if the given side value is valid
+func ValidateSide(side string) error {
+	if side == "" {
+		return errors.New("side cannot be empty")
+	}
+	
+	validSides := []string{ClientSide, ServerSide, UniversalSide, "both"}
+	for _, validSide := range validSides {
+		if side == validSide {
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("invalid side '%s'. Valid values are: %s", side, strings.Join(validSides, ", "))
+}
+
+// NormalizeSide converts user-friendly side values to internal constants
+func NormalizeSide(side string) string {
+	side = strings.TrimSpace(side)
+	if side == "both" {
+		return UniversalSide
+	}
+	return side
+}
+
+// ValidateClientPlatforms checks if all platforms in the slice are valid
+func ValidateClientPlatforms(platforms []string) error {
+	for _, platform := range platforms {
+		// Skip empty strings (allows clearing the list)
+		if platform == "" {
+			continue
+		}
+		
+		// Trim whitespace and convert to lowercase for more forgiving input
+		platform = strings.ToLower(strings.TrimSpace(platform))
+		
+		found := false
+		for _, validPlatform := range ValidClientPlatforms {
+			if platform == validPlatform {
+				found = true
+				break
+			}
+		}
+		
+		if !found {
+			return fmt.Errorf("invalid platform '%s'. Valid platforms are: %s", 
+				platform, strings.Join(ValidClientPlatforms, ", "))
+		}
+	}
+	
+	return nil
+}
+
+// NormalizeClientPlatforms cleans up and deduplicates platform names
+func NormalizeClientPlatforms(platforms []string) []string {
+	var normalized []string
+	seen := make(map[string]bool)
+	
+	for _, platform := range platforms {
+		// Skip empty strings
+		if platform == "" {
+			continue
+		}
+		
+		// Trim whitespace and convert to lowercase
+		platform = strings.ToLower(strings.TrimSpace(platform))
+		
+		// Only add if valid and not already present
+		if !seen[platform] {
+			for _, validPlatform := range ValidClientPlatforms {
+				if platform == validPlatform {
+					normalized = append(normalized, platform)
+					seen[platform] = true
+					break
+				}
+			}
+		}
+	}
+	
+	return normalized
 }

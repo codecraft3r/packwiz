@@ -169,6 +169,26 @@ var importCmd = &cobra.Command{
 			fmt.Printf("Warning: Failed to copy overrides: %v\n", err)
 		}
 
+		// Write the updated index
+		err = index.Write()
+		if err != nil {
+			fmt.Printf("Failed to write index: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Update pack hash
+		err = pack.UpdateIndexHash()
+		if err != nil {
+			fmt.Printf("Failed to update pack hash: %v\n", err)
+			os.Exit(1)
+		}
+
+		err = pack.Write()
+		if err != nil {
+			fmt.Printf("Failed to write pack: %v\n", err)
+			os.Exit(1)
+		}
+
 		fmt.Println("Import completed!")
 		if successCount < len(versionMap) {
 			fmt.Println("Some mods failed to install. You may need to install them manually.")

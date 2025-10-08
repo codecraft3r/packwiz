@@ -74,6 +74,13 @@ var installCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Validate and normalize disabled client platforms
+		if err := core.ValidateClientPlatforms(disabledClientPlatforms); err != nil {
+			fmt.Printf("Platform validation error: %v\n", err)
+			os.Exit(1)
+		}
+		disabledClientPlatforms = core.NormalizeClientPlatforms(disabledClientPlatforms)
+
 		filename := path.Base(dl.Path)
 		modMeta := core.Mod{
 			Name:     args[0],

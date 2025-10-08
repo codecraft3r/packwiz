@@ -172,6 +172,12 @@ func installRelease(repo Repo, release Release, regex string, pack core.Pack) er
 		return err
 	}
 
+	// Validate and normalize disabled client platforms
+	if err := core.ValidateClientPlatforms(disabledClientPlatformsFlag); err != nil {
+		return fmt.Errorf("platform validation error: %v", err)
+	}
+	normalizedPlatforms := core.NormalizeClientPlatforms(disabledClientPlatformsFlag)
+
 	modMeta := core.Mod{
 		Name:     repo.Name,
 		FileName: file.Name,
@@ -180,7 +186,7 @@ func installRelease(repo Repo, release Release, regex string, pack core.Pack) er
 			URL:                     file.BrowserDownloadURL,
 			HashFormat:              "sha256",
 			Hash:                    hash,
-			DisabledClientPlatforms: disabledClientPlatformsFlag,
+			DisabledClientPlatforms: normalizedPlatforms,
 		},
 		Update: updateMap,
 	}

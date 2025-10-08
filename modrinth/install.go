@@ -420,6 +420,12 @@ func createFileMeta(project *modrinthApi.Project, version *modrinthApi.Version, 
 		return errors.New("file doesn't have a hash")
 	}
 
+	// Validate and normalize disabled client platforms
+	if err := core.ValidateClientPlatforms(disabledClientPlatformsFlag); err != nil {
+		return fmt.Errorf("platform validation error: %v", err)
+	}
+	normalizedPlatforms := core.NormalizeClientPlatforms(disabledClientPlatformsFlag)
+
 	modMeta := core.Mod{
 		Name:     *project.Title,
 		FileName: *file.Filename,
@@ -428,7 +434,7 @@ func createFileMeta(project *modrinthApi.Project, version *modrinthApi.Version, 
 			URL:                     *file.URL,
 			HashFormat:              algorithm,
 			Hash:                    hash,
-			DisabledClientPlatforms: disabledClientPlatformsFlag,
+			DisabledClientPlatforms: normalizedPlatforms,
 		},
 		Update: updateMap,
 	}

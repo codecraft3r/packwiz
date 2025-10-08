@@ -177,6 +177,12 @@ func getPathForFile(gameID uint32, classID uint32, categoryID uint32, slug strin
 }
 
 func createModFile(modInfo modInfo, fileInfo modFileInfo, index *core.Index, optionalDisabled bool, disabledClientPlatforms []string) error {
+	// Validate and normalize disabled client platforms
+	if err := core.ValidateClientPlatforms(disabledClientPlatforms); err != nil {
+		return fmt.Errorf("platform validation error: %v", err)
+	}
+	disabledClientPlatforms = core.NormalizeClientPlatforms(disabledClientPlatforms)
+
 	updateMap := make(map[string]map[string]interface{})
 	var err error
 
