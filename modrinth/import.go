@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	modrinthApi "codeberg.org/jmansfield/go-modrinth/modrinth"
-	"github.com/packwiz/packwiz/core"
+	"github.com/codecraft3r/packwiz/core"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

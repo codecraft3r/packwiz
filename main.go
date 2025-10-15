@@ -2,14 +2,14 @@ package main
 
 import (
 	// Modules of packwiz
-	"github.com/packwiz/packwiz/cmd"
-	_ "github.com/packwiz/packwiz/curseforge"
-	_ "github.com/packwiz/packwiz/github"
-	_ "github.com/packwiz/packwiz/migrate"
-	_ "github.com/packwiz/packwiz/modrinth"
-	_ "github.com/packwiz/packwiz/settings"
-	_ "github.com/packwiz/packwiz/url"
-	_ "github.com/packwiz/packwiz/utils"
+	"github.com/codecraft3r/packwiz/cmd"
+	_ "github.com/codecraft3r/packwiz/curseforge"
+	_ "github.com/codecraft3r/packwiz/github"
+	_ "github.com/codecraft3r/packwiz/migrate"
+	_ "github.com/codecraft3r/packwiz/modrinth"
+	_ "github.com/codecraft3r/packwiz/settings"
+	_ "github.com/codecraft3r/packwiz/url"
+	_ "github.com/codecraft3r/packwiz/utils"
 )
 
 func main() {

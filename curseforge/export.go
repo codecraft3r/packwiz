@@ -7,9 +7,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/packwiz/packwiz/cmdshared"
-	"github.com/packwiz/packwiz/core"
-	"github.com/packwiz/packwiz/curseforge/packinterop"
+	"github.com/codecraft3r/packwiz/cmdshared"
+	"github.com/codecraft3r/packwiz/core"
+	"github.com/codecraft3r/packwiz/curseforge/packinterop"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

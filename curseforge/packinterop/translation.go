@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/packwiz/packwiz/core"
+	"github.com/codecraft3r/packwiz/core"
 )
 
 func ReadMetadata(s ImportPackSource) ImportPackMetadata {
