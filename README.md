@@ -24,16 +24,22 @@ Join my Discord server if you need help [here](https://discord.gg/Csh8zbbhCt)!
 - Creation of remote file metadata from JAR files for CurseForge mods
 
 ## Installation
-Prebuilt binaries are available from [GitHub Actions](https://github.com/packwiz/packwiz/actions) - the UI is a bit terrible, but essentially select the top build, then download the artifact ZIP for your system at the bottom of the page.  
+Prebuilt binaries are available from [GitHub Actions](https://github.com/codecraft3r/packwiz/actions) - the UI is a bit terrible, but essentially select the top build, then download the artifact ZIP for your system at the bottom of the page.  
 
-Another option is to use [nightly.link](https://nightly.link/packwiz/packwiz/workflows/go/main). Just go to the page, and download the artifact for your system.  
+Another option is to use [nightly.link](https://nightly.link/codecraft3r/packwiz/workflows/go/main). Just go to the page, and download the artifact for your system.  
 
 To run the executable, first extract it, then add the folder where you extracted it to your PATH environment variable ([see tutorial for Windows here](https://www.howtogeek.com/118594/how-to-edit-your-system-path-for-easy-command-line-access/)) or move it to where you want to use it.
 
 In future I will have a lot more installation options, but you can also compile from source:
 
 1. Install Go (1.24 or newer) from https://golang.org/dl/
-2. Run `go install github.com/packwiz/packwiz@latest`. Be patient, it has to download and compile dependencies as well!
+2. Run `go install github.com/codecraft3r/packwiz@latest`. Be patient, it has to download and compile dependencies as well!
+
+**Note:** If you encounter module path conflicts, try clearing the module cache and using direct proxy:
+```bash
+go clean -modcache
+GOPROXY=direct go install github.com/codecraft3r/packwiz@latest
+``` 
 
 ## Documentation
 See https://packwiz.infra.link/ for the full packwiz documentation!
