@@ -325,32 +325,27 @@ func determineSideFromEnv(env *FileEnv) (side string, shouldSkip bool, warning s
 		return core.UniversalSide, false, ""
 	}
 
-	clientSupported := env.Client == "required" || env.Client == "optional"
-	serverSupported := env.Server == "required" || env.Server == "optional"
+	// Use the same logic as shouldDownloadOnSide from modrinth.go
+	clientSupported := shouldDownloadOnSide(env.Client)
+	serverSupported := shouldDownloadOnSide(env.Server)
 	
 	clientUnsupported := env.Client == "unsupported"
 	serverUnsupported := env.Server == "unsupported"
 
-	// Handle unknown values with warnings
-	clientUnknown := env.Client == "unknown" || (env.Client != "required" && env.Client != "optional" && env.Client != "unsupported" && env.Client != "")
-	serverUnknown := env.Server == "unknown" || (env.Server != "required" && env.Server != "optional" && env.Server != "unsupported" && env.Server != "")
+	// Handle unknown/empty values
+	clientUnknown := env.Client == "unknown" || env.Client == ""
+	serverUnknown := env.Server == "unknown" || env.Server == ""
 
-	// Skip if unsupported on both sides
+	// Skip if explicitly unsupported on both sides
 	if clientUnsupported && serverUnsupported {
 		return "", true, ""
 	}
 
-	// Skip if unsupported on one side and unknown/empty on the other
-	if (clientUnsupported && (env.Server == "" || serverUnknown)) || 
-	   (serverUnsupported && (env.Client == "" || clientUnknown)) {
-		return "", true, ""
-	}
-
 	var warnings []string
-	if clientUnknown {
+	if clientUnknown && !serverSupported && !serverUnsupported {
 		warnings = append(warnings, "client side compatibility unknown")
 	}
-	if serverUnknown {
+	if serverUnknown && !clientSupported && !clientUnsupported {
 		warnings = append(warnings, "server side compatibility unknown")
 	}
 	
@@ -359,25 +354,25 @@ func determineSideFromEnv(env *FileEnv) (side string, shouldSkip bool, warning s
 		warningMsg = "Unknown side compatibility: " + strings.Join(warnings, ", ")
 	}
 
-	// Determine side
+	// Determine side based on support
 	if clientSupported && serverSupported {
 		return core.UniversalSide, false, warningMsg
-	} else if clientSupported || (clientUnknown && !serverSupported && !serverUnsupported) {
+	} else if clientSupported && (serverUnsupported || (!serverSupported && serverUnknown)) {
 		return core.ClientSide, false, warningMsg
-	} else if serverSupported || (serverUnknown && !clientSupported && !clientUnsupported) {
+	} else if serverSupported && (clientUnsupported || (!clientSupported && clientUnknown)) {
 		return core.ServerSide, false, warningMsg
-	} else if clientUnknown || serverUnknown {
-		// Default to universal if unknown
+	} else if clientSupported && !serverSupported && !serverUnsupported {
+		// Client supported, server unknown/empty - assume client-only
+		return core.ClientSide, false, warningMsg
+	} else if serverSupported && !clientSupported && !clientUnsupported {
+		// Server supported, client unknown/empty - assume server-only
+		return core.ServerSide, false, warningMsg
+	} else if clientUnknown && serverUnknown {
+		// Both unknown - default to universal
 		return core.UniversalSide, false, warningMsg
 	}
 
-	// Default case - unsupported on one side
-	if clientUnsupported {
-		return core.ServerSide, false, warningMsg
-	} else if serverUnsupported {
-		return core.ClientSide, false, warningMsg
-	}
-
+	// Default to universal if we can't determine specificity
 	return core.UniversalSide, false, warningMsg
 }
 
