@@ -298,7 +298,9 @@ func calculateIndexHash(pack core.Pack) (string, error) {
 		return "", err
 	}
 
-	return hasher.HashToString(content), nil
+	// Get the final hash bytes and format as string
+	hashBytes := hasher.Sum(nil)
+	return hasher.HashToString(hashBytes), nil
 }
 
 func init() {
