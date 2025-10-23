@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	modrinthApi "codeberg.org/jmansfield/go-modrinth/modrinth"
 	"github.com/codecraft3r/packwiz/core"
@@ -139,30 +138,34 @@ var importCmd = &cobra.Command{
 				continue
 			}
 
-			// Determine side based on environment information
-			side, shouldSkip, warning := determineSideFromEnv(fileRef.Env)
-			if shouldSkip {
-				fmt.Printf("Skipping mod (version ID: %s) - marked as unsupported on both client and server\n", versionInfo.ID)
+			// Get project information from API to determine accurate side information
+			project, err := mrDefaultClient.Projects.Get(versionInfo.ProjectID)
+			if err != nil {
+				fmt.Printf("Failed to get project info for version ID %s: %v\n", versionInfo.ID, err)
 				continue
 			}
 
-			if warning != "" {
-				fmt.Printf("Warning: %s (version ID: %s)\n", warning, versionInfo.ID)
+			// Use API data for side determination instead of mrpack env data
+			side := getSide(project)
+			if side == "" {
+				fmt.Printf("Warning: Project %s doesn't have a supported side; assuming universal. Server: %s Client: %s\n",
+					*project.Title, *project.ServerSide, *project.ClientSide)
+				side = core.UniversalSide
 			}
 
-			fmt.Printf("Installing mod (version ID: %s) with side: %s...\n", versionInfo.ID, side)
-			
-			// Install the mod with proper side information
-			err := installVersionByIdWithSide(versionInfo.ID, "", side, pack, &index)
+			fmt.Printf("Installing mod %s (version ID: %s) with side: %s...\n", *project.Title, versionInfo.ID, side)
+
+			// Install the mod with API-determined side information
+			err = installVersionByIdWithSide(versionInfo.ID, "", side, pack, &index)
 			if err != nil {
-				fmt.Printf("Failed to install mod with version ID %s: %v\n", versionInfo.ID, err)
+				fmt.Printf("Failed to install mod %s with version ID %s: %v\n", *project.Title, versionInfo.ID, err)
 			} else {
 				successCount++
 			}
 		}
 
 		fmt.Printf("Successfully installed %d out of %d mods\n", successCount, len(versionMap))
-		
+
 		// Copy overrides if they exist
 		err = copyOverrides(r, &index)
 		if err != nil {
@@ -262,12 +265,12 @@ func lookupVersionsByHash(hashes []string) (map[string]HashResponse, error) {
 // copyOverrides copies override files from the .mrpack to the pack directory
 func copyOverrides(r *zip.ReadCloser, index *core.Index) error {
 	overridesCopied := 0
-	
+
 	for _, f := range r.File {
 		// Check if file is in overrides directory
 		if len(f.Name) > 10 && f.Name[:10] == "overrides/" {
 			relativePath := f.Name[10:] // Remove "overrides/" prefix
-			
+
 			if f.FileInfo().IsDir() {
 				// Create directory
 				destPath := index.ResolveIndexPath(relativePath)
@@ -285,7 +288,7 @@ func copyOverrides(r *zip.ReadCloser, index *core.Index) error {
 			}
 
 			destPath := index.ResolveIndexPath(relativePath)
-			
+
 			// Ensure parent directory exists
 			err = os.MkdirAll(filepath.Dir(destPath), 0755)
 			if err != nil {
@@ -302,7 +305,7 @@ func copyOverrides(r *zip.ReadCloser, index *core.Index) error {
 			_, err = io.Copy(destFile, rc)
 			rc.Close()
 			destFile.Close()
-			
+
 			if err != nil {
 				return fmt.Errorf("failed to copy override file %s: %v", relativePath, err)
 			}
@@ -316,73 +319,6 @@ func copyOverrides(r *zip.ReadCloser, index *core.Index) error {
 	}
 
 	return nil
-}
-
-// determineSideFromEnv determines the packwiz side based on mrpack environment information
-func determineSideFromEnv(env *FileEnv) (side string, shouldSkip bool, warning string) {
-	if env == nil {
-		// No environment info, assume universal
-		return core.UniversalSide, false, ""
-	}
-
-	// Check each side's specific status
-	clientRequired := env.Client == "required"
-	clientOptional := env.Client == "optional"
-	clientUnsupported := env.Client == "unsupported"
-	clientUnknown := env.Client == "unknown" || env.Client == ""
-
-	serverRequired := env.Server == "required"
-	serverOptional := env.Server == "optional"
-	serverUnsupported := env.Server == "unsupported"
-	serverUnknown := env.Server == "unknown" || env.Server == ""
-
-	// Skip if explicitly unsupported on both sides
-	if clientUnsupported && serverUnsupported {
-		return "", true, ""
-	}
-
-	var warnings []string
-	if clientUnknown && !serverRequired && !serverOptional && !serverUnsupported {
-		warnings = append(warnings, "client side compatibility unknown")
-	}
-	if serverUnknown && !clientRequired && !clientOptional && !clientUnsupported {
-		warnings = append(warnings, "server side compatibility unknown")
-	}
-	
-	warningMsg := ""
-	if len(warnings) > 0 {
-		warningMsg = "Unknown side compatibility: " + strings.Join(warnings, ", ")
-	}
-
-	// Determine side based on support status
-	// Only consider universal if REQUIRED on both sides, or if one side is required and the other is optional
-	if clientRequired && serverRequired {
-		return core.UniversalSide, false, warningMsg
-	} else if clientRequired && serverOptional {
-		return core.UniversalSide, false, warningMsg
-	} else if clientOptional && serverRequired {
-		return core.UniversalSide, false, warningMsg
-	} else if (clientRequired || clientOptional) && serverUnsupported {
-		return core.ClientSide, false, warningMsg
-	} else if (serverRequired || serverOptional) && clientUnsupported {
-		return core.ServerSide, false, warningMsg
-	} else if (clientRequired || clientOptional) && (serverUnknown || env.Server == "") {
-		// Client supported, server unknown/empty - assume client-only
-		return core.ClientSide, false, warningMsg
-	} else if (serverRequired || serverOptional) && (clientUnknown || env.Client == "") {
-		// Server supported, client unknown/empty - assume server-only
-		return core.ServerSide, false, warningMsg
-	} else if clientOptional && serverOptional {
-		// Both optional - this is more accurately client+server compatible but not required on either
-		// In this case, default to universal as the mod can run on both sides
-		return core.UniversalSide, false, warningMsg
-	} else if clientUnknown && serverUnknown {
-		// Both unknown - default to universal
-		return core.UniversalSide, false, warningMsg
-	}
-
-	// Default to universal if we can't determine specificity
-	return core.UniversalSide, false, warningMsg
 }
 
 // installVersionByIdWithSide installs a mod version with a specific side override
