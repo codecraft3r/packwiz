@@ -9,7 +9,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	modrinthApi "codeberg.org/jmansfield/go-modrinth/modrinth"
 	"github.com/codecraft3r/packwiz/core"
@@ -121,9 +124,68 @@ var importCmd = &cobra.Command{
 
 		fmt.Printf("Found %d mods to install\n", len(versionMap))
 
+		// Get list of already installed Modrinth projects to avoid duplicates
+		installedProjects := getInstalledProjectIDs(&index)
+		fmt.Printf("Found %d already installed Modrinth mods\n", len(installedProjects))
+
 		// Install each mod
 		successCount := 0
+		skippedCount := 0
+		totalMods := len(versionMap)
+
+		// Set up crash recovery - save progress periodically and on exit
+		saveProgress := func() {
+			if successCount > 0 {
+				fmt.Printf("Saving progress (%d mods installed)...\n", successCount)
+				if writeErr := index.Write(); writeErr != nil {
+					fmt.Printf("Warning: Failed to save progress to index: %v\n", writeErr)
+				} else {
+					if hashErr := pack.UpdateIndexHash(); hashErr != nil {
+						fmt.Printf("Warning: Failed to update pack hash: %v\n", hashErr)
+					} else {
+						if packErr := pack.Write(); packErr != nil {
+							fmt.Printf("Warning: Failed to save pack: %v\n", packErr)
+						}
+					}
+				}
+			}
+		}
+
+		// Set up signal handling to catch Ctrl+C and save progress
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+		// Channel to communicate completion
+		doneChan := make(chan bool, 1)
+
+		// Goroutine to handle signals
+		go func() {
+			select {
+			case sig := <-sigChan:
+				fmt.Printf("\nReceived signal %v, saving progress and exiting...\n", sig)
+				saveProgress()
+				fmt.Printf("Import interrupted. Progress saved: %d installed, %d skipped\n", successCount, skippedCount)
+				os.Exit(0)
+			case <-doneChan:
+				// Normal completion, exit the goroutine
+				return
+			}
+		}()
+
+		// Defer cleanup to ensure progress is saved on any exit (including crashes/interrupts)
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("\nImport interrupted! Attempting to save progress...\n")
+				saveProgress()
+				fmt.Printf("Recovered from crash: %v\n", r)
+				fmt.Printf("Import partially completed: %d installed, %d skipped\n", successCount, skippedCount)
+			}
+		}()
+
+		processedCount := 0
 		for hash, versionInfo := range versionMap {
+			processedCount++
+
 			// Find the corresponding file info
 			var fileRef *ModrinthIndexFileRef
 			for _, file := range modrinthIndex.Files {
@@ -138,8 +200,23 @@ var importCmd = &cobra.Command{
 				continue
 			}
 
-			// Get project information from API to determine accurate side information
-			project, err := mrDefaultClient.Projects.Get(versionInfo.ProjectID)
+			// Check if this project is already installed
+			projectAlreadyInstalled := false
+			for _, installedID := range installedProjects {
+				if installedID == versionInfo.ProjectID {
+					projectAlreadyInstalled = true
+					break
+				}
+			}
+
+			if projectAlreadyInstalled {
+				fmt.Printf("Skipping already installed project (project ID: %s)\n", versionInfo.ProjectID)
+				skippedCount++
+				continue
+			}
+
+			// Get project information from API to determine accurate side information (with rate limit handling)
+			project, err := getProjectWithRateLimit(versionInfo.ProjectID)
 			if err != nil {
 				fmt.Printf("Failed to get project info for version ID %s: %v\n", versionInfo.ID, err)
 				continue
@@ -153,7 +230,8 @@ var importCmd = &cobra.Command{
 				side = core.UniversalSide
 			}
 
-			fmt.Printf("Installing mod %s (version ID: %s) with side: %s...\n", *project.Title, versionInfo.ID, side)
+			fmt.Printf("Installing mod %s (%d/%d) (version ID: %s) with side: %s...\n",
+				*project.Title, processedCount, totalMods, versionInfo.ID, side)
 
 			// Install the mod with API-determined side information
 			err = installVersionByIdWithSide(versionInfo.ID, "", side, pack, &index)
@@ -161,10 +239,20 @@ var importCmd = &cobra.Command{
 				fmt.Printf("Failed to install mod %s with version ID %s: %v\n", *project.Title, versionInfo.ID, err)
 			} else {
 				successCount++
+
+				// Save progress every 10 successful installations to minimize loss on crash
+				if successCount%10 == 0 {
+					fmt.Printf("Checkpoint: Saving progress after %d installations...\n", successCount)
+					saveProgress()
+				}
 			}
 		}
 
-		fmt.Printf("Successfully installed %d out of %d mods\n", successCount, len(versionMap))
+		// Signal completion to stop the signal handler
+		close(doneChan)
+
+		fmt.Printf("Import summary: %d installed, %d skipped (already installed), %d failed\n",
+			successCount, skippedCount, len(versionMap)-successCount-skippedCount)
 
 		// Copy overrides if they exist
 		err = copyOverrides(r, &index)
@@ -193,8 +281,9 @@ var importCmd = &cobra.Command{
 		}
 
 		fmt.Println("Import completed!")
-		if successCount < len(versionMap) {
-			fmt.Println("Some mods failed to install. You may need to install them manually.")
+		failedCount := len(versionMap) - successCount - skippedCount
+		if failedCount > 0 {
+			fmt.Printf("%d mods failed to install. You may need to install them manually.\n", failedCount)
 		}
 	},
 }
@@ -260,6 +349,54 @@ func lookupVersionsByHash(hashes []string) (map[string]HashResponse, error) {
 	}
 
 	return responseData, nil
+}
+
+// getProjectWithRateLimit gets project information with rate limit handling
+func getProjectWithRateLimit(projectID string) (*modrinthApi.Project, error) {
+	maxRetries := 3
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		project, err := mrDefaultClient.Projects.Get(projectID)
+		if err == nil {
+			return project, nil
+		}
+
+		// Check if this is a rate limit error (status 429 or rate limit in error message)
+		errorMsg := err.Error()
+		isRateLimit := false
+
+		// Check for common rate limit indicators
+		if containsAny(errorMsg, []string{"429", "rate limit", "Rate limit", "too many requests", "Too Many Requests"}) {
+			isRateLimit = true
+		}
+
+		if isRateLimit && attempt < maxRetries-1 {
+			// Wait 60 seconds for rate limit reset (Modrinth resets every minute)
+			waitTime := 60 * time.Second
+			fmt.Printf("Rate limited, waiting %v before retry %d/%d...\n", waitTime, attempt+2, maxRetries)
+			time.Sleep(waitTime)
+			continue
+		}
+
+		// For non-rate-limit errors or final attempt, return the error
+		return nil, err
+	}
+
+	return nil, fmt.Errorf("failed to get project after %d retries", maxRetries)
+}
+
+// containsAny checks if a string contains any of the given substrings
+func containsAny(s string, substrings []string) bool {
+	for _, substr := range substrings {
+		if len(s) >= len(substr) {
+			for i := 0; i <= len(s)-len(substr); i++ {
+				if s[i:i+len(substr)] == substr {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // copyOverrides copies override files from the .mrpack to the pack directory

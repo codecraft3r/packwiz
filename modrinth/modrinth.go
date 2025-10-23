@@ -360,7 +360,7 @@ func getSide(mod *modrinthApi.Project) string {
 func shouldDownloadOnSide(side string) bool {
 	// Updated to handle new Modrinth side values:
 	// required - mod is required on this side
-	// optional - mod is optional on this side  
+	// optional - mod is optional on this side
 	// unsupported - mod cannot run on this side
 	// unknown - side compatibility is unknown
 	return side == "required" || side == "optional"
@@ -397,11 +397,37 @@ func getBestHash(v *modrinthApi.File) (string, string) {
 
 func getInstalledProjectIDs(index *core.Index) []string {
 	var installedProjects []string
-	// Get modids of all mods
+
+	// Try to load all mods, but handle errors gracefully
 	mods, err := index.LoadAllMods()
 	if err != nil {
-		fmt.Printf("Failed to determine existing projects: %v\n", err)
+		// If LoadAllMods fails, we'll try to load individual files from the index
+		fmt.Printf("Warning: Some mod files may be missing or corrupted: %v\n", err)
+		fmt.Println("Attempting to load remaining mod files individually...")
+
+		// Get the files directly from the index structure and try to load them individually
+		for fileName, fileData := range index.Files {
+			if fileData.IsMetaFile() {
+				modPath := index.ResolveIndexPath(fileName)
+				mod, loadErr := core.LoadMod(modPath)
+				if loadErr != nil {
+					fmt.Printf("Warning: Skipping mod file %s: %v\n", fileName, loadErr)
+					continue
+				}
+
+				data, ok := mod.GetParsedUpdateData("modrinth")
+				if ok {
+					updateData, ok := data.(mrUpdateData)
+					if ok {
+						if len(updateData.ProjectID) > 0 {
+							installedProjects = append(installedProjects, updateData.ProjectID)
+						}
+					}
+				}
+			}
+		}
 	} else {
+		// Normal case: all mods loaded successfully
 		for _, mod := range mods {
 			data, ok := mod.GetParsedUpdateData("modrinth")
 			if ok {
@@ -414,6 +440,7 @@ func getInstalledProjectIDs(index *core.Index) []string {
 			}
 		}
 	}
+
 	return installedProjects
 }
 
