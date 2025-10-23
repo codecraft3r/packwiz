@@ -325,15 +325,15 @@ func determineSideFromEnv(env *FileEnv) (side string, shouldSkip bool, warning s
 		return core.UniversalSide, false, ""
 	}
 
-	// Use the same logic as shouldDownloadOnSide from modrinth.go
-	clientSupported := shouldDownloadOnSide(env.Client)
-	serverSupported := shouldDownloadOnSide(env.Server)
-	
+	// Check each side's specific status
+	clientRequired := env.Client == "required"
+	clientOptional := env.Client == "optional"
 	clientUnsupported := env.Client == "unsupported"
-	serverUnsupported := env.Server == "unsupported"
-
-	// Handle unknown/empty values
 	clientUnknown := env.Client == "unknown" || env.Client == ""
+
+	serverRequired := env.Server == "required"
+	serverOptional := env.Server == "optional"
+	serverUnsupported := env.Server == "unsupported"
 	serverUnknown := env.Server == "unknown" || env.Server == ""
 
 	// Skip if explicitly unsupported on both sides
@@ -342,10 +342,10 @@ func determineSideFromEnv(env *FileEnv) (side string, shouldSkip bool, warning s
 	}
 
 	var warnings []string
-	if clientUnknown && !serverSupported && !serverUnsupported {
+	if clientUnknown && !serverRequired && !serverOptional && !serverUnsupported {
 		warnings = append(warnings, "client side compatibility unknown")
 	}
-	if serverUnknown && !clientSupported && !clientUnsupported {
+	if serverUnknown && !clientRequired && !clientOptional && !clientUnsupported {
 		warnings = append(warnings, "server side compatibility unknown")
 	}
 	
@@ -354,19 +354,28 @@ func determineSideFromEnv(env *FileEnv) (side string, shouldSkip bool, warning s
 		warningMsg = "Unknown side compatibility: " + strings.Join(warnings, ", ")
 	}
 
-	// Determine side based on support
-	if clientSupported && serverSupported {
+	// Determine side based on support status
+	// Only consider universal if REQUIRED on both sides, or if one side is required and the other is optional
+	if clientRequired && serverRequired {
 		return core.UniversalSide, false, warningMsg
-	} else if clientSupported && (serverUnsupported || (!serverSupported && serverUnknown)) {
+	} else if clientRequired && serverOptional {
+		return core.UniversalSide, false, warningMsg
+	} else if clientOptional && serverRequired {
+		return core.UniversalSide, false, warningMsg
+	} else if (clientRequired || clientOptional) && serverUnsupported {
 		return core.ClientSide, false, warningMsg
-	} else if serverSupported && (clientUnsupported || (!clientSupported && clientUnknown)) {
+	} else if (serverRequired || serverOptional) && clientUnsupported {
 		return core.ServerSide, false, warningMsg
-	} else if clientSupported && !serverSupported && !serverUnsupported {
+	} else if (clientRequired || clientOptional) && (serverUnknown || env.Server == "") {
 		// Client supported, server unknown/empty - assume client-only
 		return core.ClientSide, false, warningMsg
-	} else if serverSupported && !clientSupported && !clientUnsupported {
+	} else if (serverRequired || serverOptional) && (clientUnknown || env.Client == "") {
 		// Server supported, client unknown/empty - assume server-only
 		return core.ServerSide, false, warningMsg
+	} else if clientOptional && serverOptional {
+		// Both optional - this is more accurately client+server compatible but not required on either
+		// In this case, default to universal as the mod can run on both sides
+		return core.UniversalSide, false, warningMsg
 	} else if clientUnknown && serverUnknown {
 		// Both unknown - default to universal
 		return core.UniversalSide, false, warningMsg
